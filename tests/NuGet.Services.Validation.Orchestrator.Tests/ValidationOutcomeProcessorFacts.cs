@@ -66,6 +66,57 @@ namespace NuGet.Services.Validation.Orchestrator.Tests
         }
 
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task DoesNotUpdatePackageStatusForIncompletePackages(bool timedOut)
+        {
+            const string validationName = "validation1";
+            AddValidation(validationName, ValidationStatus.Incomplete);
+            if (timedOut)
+            {
+                ValidationSet.PackageValidations.First().Started = DateTime.UtcNow.AddSeconds(-2);
+                Configuration.Validations.First().FailAfter = TimeSpan.FromSeconds(1);
+            }
+
+            var processor = CreateProcessor();
+            await processor.ProcessValidationOutcomeAsync(ValidationSet, Package);
+
+            PackageServiceMock
+                .Verify(ps => ps.UpdatePackageStatusAsync(It.IsAny<Package>(), It.IsAny<PackageStatus>(), It.IsAny<bool>()), Times.Never());
+            PackageServiceMock
+                .Verify(ps => ps.UpdateIsLatestAsync(It.IsAny<PackageRegistration>(), It.IsAny<bool>()), Times.Never());
+        }
+
+        [Fact]
+        public async Task TracksPackageValidationTimeout()
+        {
+            const string validationName = "validation1";
+            AddValidation(validationName, ValidationStatus.Incomplete);
+            ValidationSet.PackageValidations.First().Started = DateTime.UtcNow.AddSeconds(-2);
+            Configuration.Validations.First().FailAfter = TimeSpan.FromSeconds(1);
+
+            var processor = CreateProcessor();
+            await processor.ProcessValidationOutcomeAsync(ValidationSet, Package);
+
+            TelemetryServiceMock
+                .Verify(ts => ts.TrackValidatorTimeout(validationName), Times.Once());
+        }
+
+        [Fact]
+        public async Task SendsTooLongValidationNotificationForTimedOutValidations()
+        {
+            const string validationName = "validation1";
+            AddValidation(validationName, ValidationStatus.Incomplete);
+            ValidationSet.PackageValidations.First().Started = DateTime.UtcNow.AddSeconds(-2);
+            Configuration.Validations.First().FailAfter = TimeSpan.FromSeconds(1);
+
+            var processor = CreateProcessor();
+            await processor.ProcessValidationOutcomeAsync(ValidationSet, Package);
+
+            // TODO: validate that proper notification method is called
+        }
+
+        [Theory]
         [InlineData(new[] { ValidationIssueCode.PackageIsSigned })]
         [InlineData(new[] { ValidationIssueCode.PackageIsSigned, ValidationIssueCode.PackageIsSigned })]
         public async Task SendsPackageSignedFailureEmail(ValidationIssueCode[] issueCodes)
@@ -434,6 +485,7 @@ namespace NuGet.Services.Validation.Orchestrator.Tests
                 Type = validationName,
                 ValidationStatus = validationStatus,
                 PackageValidationIssues = new List<PackageValidationIssue> { },
+                PackageValidationSet = ValidationSet
             });
             Configuration.Validations.Add(new ValidationConfigurationItem
             {

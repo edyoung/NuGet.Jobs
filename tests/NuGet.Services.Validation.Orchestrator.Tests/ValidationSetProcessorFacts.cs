@@ -266,7 +266,7 @@ namespace NuGet.Services.Validation.Orchestrator.Tests
         }
 
         [Fact]
-        public async Task UsesFailAfterConfigurationToTreatLongImcompleteAsFailed()
+        public async Task DoesNotFailLongRunningValidations()
         {
             UseDefaultValidatorProvider();
             var failAfter = TimeSpan.FromDays(1);
@@ -281,24 +281,16 @@ namespace NuGet.Services.Validation.Orchestrator.Tests
                 .ReturnsAsync(validationResult)
                 .Verifiable();
 
-            ValidationStorageMock
-                .Setup(vs => vs.UpdateValidationStatusAsync(
-                                validation,
-                                It.Is<IValidationResult>(r => r.Status == ValidationStatus.Failed)))
-                .Returns(Task.FromResult(0));
-
             var processor = CreateProcessor();
             await processor.ProcessValidationsAsync(ValidationSet, Package);
 
             ValidationStorageMock
                 .Verify(vs => vs.UpdateValidationStatusAsync(
                                 validation,
-                                It.Is<IValidationResult>(r => r.Status == ValidationStatus.Failed)),
-                    Times.Once);
+                                It.IsAny<IValidationResult>()),
+                    Times.Never);
             TelemetryServiceMock
-                .Verify(ts => ts.TrackValidatorTimeout(validation.Type), Times.Once);
-            TelemetryServiceMock
-                .Verify(ts => ts.TrackValidatorTimeout(It.IsAny<string>()), Times.Once);
+                .Verify(ts => ts.TrackValidatorTimeout(It.IsAny<string>()), Times.Never);
         }
 
         [Theory]

@@ -58,85 +58,120 @@ namespace NuGet.Services.Validation.Orchestrator
                 return null;
             }
 
+            List<PackageValidation> timedOutValidations;
+
             if (AnyValidationFailed(validationSet, GetValidationConfigurationItem))
             {
-                _logger.LogWarning("Some validations failed for package {PackageId} {PackageVersion}, validation set {ValidationSetId}: {FailedValidations}",
-                    package.PackageRegistration.Id,
-                    package.NormalizedVersion,
-                    validationSet.ValidationTrackingId,
-                    GetFailedValidations(validationSet, GetValidationConfigurationItem));
-
-                // The only way we can move to the failed validation state is if the package is currently in the
-                // validating state. This has a beneficial side effect of only sending a failed validation email to the
-                // customer when the package first moves to the failed validation state. If an admin comes along and
-                // revalidates the package and the package fails validation again, we don't want another email going
-                // out since that would be noisy for the customer.                
-                if (package.PackageStatusKey == PackageStatus.Validating)
-                {
-                    await UpdatePackageStatusAsync(package, PackageStatus.FailedValidation);
-
-                    var issuesExistAndAllPackageSigned = validationSet
-                        .PackageValidations
-                        .SelectMany(pv => pv.PackageValidationIssues)
-                        .Select(pvi => pvi.IssueCode == ValidationIssueCode.PackageIsSigned)
-                        .DefaultIfEmpty(false)
-                        .All(v => v);
-
-                    if (issuesExistAndAllPackageSigned)
-                    {
-                        _messageService.SendPackageSignedValidationFailedMessage(package);
-                    }
-                    else
-                    {
-                        _messageService.SendPackageValidationFailedMessage(package);
-                    }
-                }
-                else
-                {
-                    // The case when validation fails while PackageStatus not validating is the case of 
-                    // manual revalidation. In this case we don't want to take package down automatically
-                    // and let the person who requested revalidation to decide how to proceed. Ops will be
-                    // alerted by failed validation monitoring.
-                    _logger.LogInformation("Package {PackageId} {PackageVersion} was {PackageStatus} when validation set {ValidationSetId} failed. Will not mark it as failed.",
-                        package.PackageRegistration.Id,
-                        package.NormalizedVersion,
-                        package.PackageStatusKey,
-                        validationSet.ValidationTrackingId);
-                }
-
-                TrackTotalValidationDuration(validationSet, isSuccess: false);
+                await ProcessFailedValidation(validationSet, package, GetFailedValidations(validationSet, GetValidationConfigurationItem));
+            }
+            else if ((timedOutValidations = GetTimedOutValidations(validationSet, GetValidationConfigurationItem)).Any())
+            {
+                ProcessTimedOutValidation(timedOutValidations, GetValidationConfigurationItem);
             }
             else if (AllValidationsSucceeded(validationSet, GetValidationConfigurationItem))
             {
-                _logger.LogInformation("All validations are complete for the package {PackageId} {PackageVersion}, validation set {ValidationSetId}",
-                    package.PackageRegistration.Id,
-                    package.NormalizedVersion,
-                    validationSet.ValidationTrackingId);
-                if (package.PackageStatusKey != PackageStatus.Available)
-                {
-                    await MoveFileToPublicStorageAndMarkPackageAsAvailable(validationSet, package);
-                }
-                else
-                {
-                    _logger.LogInformation("Package {PackageId} {PackageVersion} {ValidationSetId} was already available, not going to copy data and update DB",
-                        package.PackageRegistration.Id,
-                        package.NormalizedVersion,
-                        validationSet.ValidationTrackingId);
-                }
-                _logger.LogInformation("Done processing {PackageId} {PackageVersion} {ValidationSetId}",
-                    package.PackageRegistration.Id,
-                    package.NormalizedVersion,
-                    validationSet.ValidationTrackingId);
-
-                TrackTotalValidationDuration(validationSet, isSuccess: true);
+                await ProcessSucceededValidationSet(validationSet, package);
             }
             else
             {
-                // No failed validations and some validations are still in progress.
+                // No failed and timed out validations, and some validations are still in progress.
                 // Scheduling another check
                 var messageData = new PackageValidationMessageData(package.PackageRegistration.Id, package.Version, validationSet.ValidationTrackingId);
                 await _validationEnqueuer.StartValidationAsync(messageData, DateTimeOffset.UtcNow + _validationConfiguration.ValidationMessageRecheckPeriod);
             }
+        }
+
+        private async Task ProcessSucceededValidationSet(PackageValidationSet validationSet, Package package)
+        {
+            _logger.LogInformation("All validations are complete for the package {PackageId} {PackageVersion}, validation set {ValidationSetId}",
+                package.PackageRegistration.Id,
+                package.NormalizedVersion,
+                validationSet.ValidationTrackingId);
+            if (package.PackageStatusKey != PackageStatus.Available)
+            {
+                await MoveFileToPublicStorageAndMarkPackageAsAvailable(validationSet, package);
+            }
+            else
+            {
+                _logger.LogInformation("Package {PackageId} {PackageVersion} {ValidationSetId} was already available, not going to copy data and update DB",
+                    package.PackageRegistration.Id,
+                    package.NormalizedVersion,
+                    validationSet.ValidationTrackingId);
+            }
+            _logger.LogInformation("Done processing {PackageId} {PackageVersion} {ValidationSetId}",
+                package.PackageRegistration.Id,
+                package.NormalizedVersion,
+                validationSet.ValidationTrackingId);
+
+            TrackTotalValidationDuration(validationSet, isSuccess: true);
+        }
+
+        private void ProcessTimedOutValidation(
+            List<PackageValidation> timedOutValidations,
+            Func<string, ValidationConfigurationItem> getValidationConfigurationItem)
+        {
+            foreach (var timedOutValidation in timedOutValidations)
+            {
+                _logger.LogWarning("Abandoning validation {Validation} for package {PackageId} {PackageVersion} that runs longer than configured failure timeout {FailAfter}",
+                    timedOutValidation.Type,
+                    timedOutValidation.PackageValidationSet.PackageId,
+                    timedOutValidation.PackageValidationSet.PackageNormalizedVersion,
+                    getValidationConfigurationItem(timedOutValidation.Type)?.FailAfter);
+
+                _telemetryService.TrackValidatorTimeout(timedOutValidation.Type);
+            }
+        }
+
+        private async Task ProcessFailedValidation(
+            PackageValidationSet validationSet,
+            Package package,
+            IEnumerable<PackageValidation> failedValidations)
+        {
+            _logger.LogWarning("Some validations failed for package {PackageId} {PackageVersion}, validation set {ValidationSetId}: {FailedValidations}",
+                package.PackageRegistration.Id,
+                package.NormalizedVersion,
+                validationSet.ValidationTrackingId,
+                failedValidations);
+
+            // The only way we can move to the failed validation state is if the package is currently in the
+            // validating state. This has a beneficial side effect of only sending a failed validation email to the
+            // customer when the package first moves to the failed validation state. If an admin comes along and
+            // revalidates the package and the package fails validation again, we don't want another email going
+            // out since that would be noisy for the customer.                
+            if (package.PackageStatusKey == PackageStatus.Validating)
+            {
+                await UpdatePackageStatusAsync(package, PackageStatus.FailedValidation);
+
+                var issuesExistAndAllPackageSigned = validationSet
+                    .PackageValidations
+                    .SelectMany(pv => pv.PackageValidationIssues)
+                    .Select(pvi => pvi.IssueCode == ValidationIssueCode.PackageIsSigned)
+                    .DefaultIfEmpty(false)
+                    .All(v => v);
+
+                if (issuesExistAndAllPackageSigned)
+                {
+                    _messageService.SendPackageSignedValidationFailedMessage(package);
+                }
+                else
+                {
+                    _messageService.SendPackageValidationFailedMessage(package);
+                }
+            }
+            else
+            {
+                // The case when validation fails while PackageStatus not validating is the case of 
+                // manual revalidation. In this case we don't want to take package down automatically
+                // and let the person who requested revalidation to decide how to proceed. Ops will be
+                // alerted by failed validation monitoring.
+                _logger.LogInformation("Package {PackageId} {PackageVersion} was {PackageStatus} when validation set {ValidationSetId} failed. Will not mark it as failed.",
+                    package.PackageRegistration.Id,
+                    package.NormalizedVersion,
+                    package.PackageStatusKey,
+                    validationSet.ValidationTrackingId);
+            }
+
+            TrackTotalValidationDuration(validationSet, isSuccess: false);
         }
 
         private void TrackTotalValidationDuration(PackageValidationSet validationSet, bool isSuccess)
@@ -189,7 +224,7 @@ namespace NuGet.Services.Validation.Orchestrator
             await _packageFileService.DeleteValidationPackageFileAsync(package.PackageRegistration.Id, package.Version);
         }
 
-        private bool AllValidationsSucceeded(
+        private static bool AllValidationsSucceeded(
             PackageValidationSet packageValidationSet,
             Func<string, ValidationConfigurationItem> getValidationConfigurationItem)
         {
@@ -199,7 +234,7 @@ namespace NuGet.Services.Validation.Orchestrator
                     || getValidationConfigurationItem(pv.Type)?.FailureBehavior == ValidationFailureBehavior.AllowedToFail);
         }
 
-        private IEnumerable<PackageValidation> GetFailedValidations(
+        private static IEnumerable<PackageValidation> GetFailedValidations(
             PackageValidationSet packageValidationSet,
             Func<string, ValidationConfigurationItem> getValidationConfigurationItem)
         {
@@ -209,12 +244,24 @@ namespace NuGet.Services.Validation.Orchestrator
                     && getValidationConfigurationItem(v.Type)?.FailureBehavior == ValidationFailureBehavior.MustSucceed);
         }
 
-        private bool AnyValidationFailed(
+        private static bool AnyValidationFailed(
             PackageValidationSet packageValidationSet,
             Func<string, ValidationConfigurationItem> getValidationConfigurationItem)
         {
             return GetFailedValidations(packageValidationSet, getValidationConfigurationItem).Any();
         }
+
+        private static List<PackageValidation> GetTimedOutValidations(
+            PackageValidationSet packageValidationSet,
+            Func<string, ValidationConfigurationItem> getValidationConfigurationItem)
+            => packageValidationSet
+                .PackageValidations
+                .Where(v => v.ValidationStatus == ValidationStatus.Incomplete
+                    && TimedOut(getValidationConfigurationItem(v.Type)?.FailAfter, v.Started))
+                .ToList();
+
+        private static bool TimedOut(TimeSpan? timeOut, DateTime? startTime)
+            => timeOut.HasValue && startTime.HasValue && DateTime.UtcNow - startTime > timeOut;
 
         private async Task UpdatePackageStatusAsync(Package package, PackageStatus toStatus)
         {

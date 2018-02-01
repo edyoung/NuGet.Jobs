@@ -105,7 +105,7 @@ namespace NuGet.Services.Validation.Orchestrator
                     switch (validationResult.Status)
                     {
                         case ValidationStatus.Incomplete:
-                            await ProcessIncompleteValidation(packageValidation, validationConfiguration);
+                            // no action
                             break;
 
                         case ValidationStatus.Failed:
@@ -224,25 +224,6 @@ namespace NuGet.Services.Validation.Orchestrator
                 packageValidation.PackageValidationSet.PackageNormalizedVersion);
 
             await _validationStorageService.UpdateValidationStatusAsync(packageValidation, ValidationResult.Failed);
-        }
-
-        private async Task ProcessIncompleteValidation(PackageValidation packageValidation, ValidationConfigurationItem validationConfiguration)
-        {
-            // need to check validation timeout
-            var duration = DateTime.UtcNow - packageValidation.Started;
-            if (duration > validationConfiguration.FailAfter)
-            {
-                _logger.LogWarning("Failing validation {Validation} for package {PackageId} {PackageVersion} that runs longer than configured failure timout {FailAfter}",
-                    packageValidation.Type,
-                    packageValidation.PackageValidationSet.PackageId,
-                    packageValidation.PackageValidationSet.PackageNormalizedVersion,
-                    validationConfiguration.FailAfter);
-                await _validationStorageService.UpdateValidationStatusAsync(packageValidation, ValidationResult.Failed);
-
-                _telemetryService.TrackValidatorTimeout(packageValidation.Type);
-
-                return;
-            }
         }
 
         private async Task<IValidationRequest> CreateValidationRequest(
