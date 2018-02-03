@@ -113,7 +113,8 @@ namespace NuGet.Services.Validation.Orchestrator.Tests
             var processor = CreateProcessor();
             await processor.ProcessValidationOutcomeAsync(ValidationSet, Package);
 
-            // TODO: validate that proper notification method is called
+            MessageServiceMock
+                .Verify(ms => ms.SendPackageValidationTakingTooLongMessage(Package), Times.Once());
         }
 
         [Theory]

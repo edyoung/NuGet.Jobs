@@ -70,5 +70,13 @@ namespace NuGet.Services.Validation.Orchestrator
             var galleryPackageUrl = string.Format(_emailConfiguration.PackageUrlTemplate, package.PackageRegistration.Id, package.NormalizedVersion);
             _coreMessageService.SendSignedPackageNotAllowedNotice(package, galleryPackageUrl, _emailConfiguration.AnnouncementsUrl, _emailConfiguration.TwitterUrl);
         }
+
+        public void SendPackageValidationTakingTooLongMessage(Package package)
+        {
+            package = package ?? throw new ArgumentNullException(nameof(package));
+            var galleryPackageUrl = string.Format(_emailConfiguration.PackageUrlTemplate, package.PackageRegistration.Id, package.NormalizedVersion);
+            var packageSupportUrl = string.Format(_emailConfiguration.PackageSupportTemplate, package.PackageRegistration.Id, package.NormalizedVersion);
+            _coreMessageService.SendValidationTakingTooLongNotice(package, galleryPackageUrl, packageSupportUrl);
+        }
     }
 }

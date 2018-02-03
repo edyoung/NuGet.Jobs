@@ -66,7 +66,7 @@ namespace NuGet.Services.Validation.Orchestrator
             }
             else if ((timedOutValidations = GetTimedOutValidations(validationSet, GetValidationConfigurationItem)).Any())
             {
-                ProcessTimedOutValidation(timedOutValidations, GetValidationConfigurationItem);
+                ProcessTimedOutValidations(timedOutValidations, package, GetValidationConfigurationItem);
             }
             else if (AllValidationsSucceeded(validationSet, GetValidationConfigurationItem))
             {
@@ -106,8 +106,9 @@ namespace NuGet.Services.Validation.Orchestrator
             TrackTotalValidationDuration(validationSet, isSuccess: true);
         }
 
-        private void ProcessTimedOutValidation(
+        private void ProcessTimedOutValidations(
             List<PackageValidation> timedOutValidations,
+            Package package,
             Func<string, ValidationConfigurationItem> getValidationConfigurationItem)
         {
             foreach (var timedOutValidation in timedOutValidations)
@@ -120,6 +121,8 @@ namespace NuGet.Services.Validation.Orchestrator
 
                 _telemetryService.TrackValidatorTimeout(timedOutValidation.Type);
             }
+
+            _messageService.SendPackageValidationTakingTooLongMessage(package);
         }
 
         private async Task ProcessFailedValidation(
