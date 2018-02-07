@@ -75,8 +75,7 @@ namespace NuGet.Services.Validation.Orchestrator
         {
             package = package ?? throw new ArgumentNullException(nameof(package));
             var galleryPackageUrl = string.Format(_emailConfiguration.PackageUrlTemplate, package.PackageRegistration.Id, package.NormalizedVersion);
-            var packageSupportUrl = string.Format(_emailConfiguration.PackageSupportTemplate, package.PackageRegistration.Id, package.NormalizedVersion);
-            _coreMessageService.SendValidationTakingTooLongNotice(package, galleryPackageUrl, packageSupportUrl);
+            _coreMessageService.SendValidationTakingTooLongNotice(package, galleryPackageUrl);
         }
     }
 }
