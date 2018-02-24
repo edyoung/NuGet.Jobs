@@ -1,0 +1,14 @@
+﻿{
+  "SymbolServer": {
+    "VSTSUri": "",
+    "DegreeOfParallelism": 16,
+    "DownloadTimeoutInSeconds": 120,
+    "ExpirationInDays": 10,
+    "PAT": ""
+  },
+  "ServiceBus": {
+    "ConnectionString": "",
+    "TopicPath": "",
+    "SubscriptionName": ""
+  }
+}

@@ -68,6 +68,30 @@ Function Prepare-NuGetCDNRedirect {
     Build-Solution $Configuration $BuildNumber -MSBuildVersion "$msBuildVersion" "src\NuGetCDNRedirect\NuGetCDNRedirect.csproj" -Target "Package" -MSBuildProperties "/P:PackageLocation=obj\NuGetCDNRedirect.zip" -SkipRestore
 }
 
+Function Install-SymbolExe {
+    [CmdletBinding()]
+    param()
+    
+    Write-Host 'Install Symbol.exe'
+    
+    $symbolzipfilepath = "$PSScriptRoot/tools/symbol.zip"
+
+    $symbolfolderpath = Join-Path $PSScriptRoot 'tools\symbol'
+    $7zipExe = Join-Path $PSScriptRoot 'tools\7zip\7za.exe'
+
+    if (Test-Path $symbolzipfilepath) {
+        Remove-Item $symbolzipfilepath
+    }
+
+    if (Test-Path $symbolfolderpath) {
+        Remove-Item $symbolfolderpath -Force -Recurse
+    }
+
+    wget -UseBasicParsing -Uri "https://nuget.artifacts.visualstudio.com/defaultcollection/_apis/symbol/client/exe" -OutFile "$symbolzipfilepath"
+    Write-Host  'Unzip Symbol.exe'
+    Write-Host  $7zipExe x $symbolzipfilepath -y -o"$symbolfolderpath"
+    & $7zipExe x $symbolzipfilepath -y -o"$symbolfolderpath"
+}
 
 Write-Host ("`r`n" * 3)
 Trace-Log ('=' * 60)
@@ -95,7 +119,10 @@ Invoke-BuildStep 'Clearing package cache' { Clear-PackageCache } `
     
 Invoke-BuildStep 'Clearing artifacts' { Clear-Artifacts } `
     -ev +BuildErrors
-    
+
+Invoke-BuildStep 'Install-SymbolExe' { Install-SymbolExe } `
+    -ev +BuildErrors
+
 Invoke-BuildStep 'Set version metadata in AssemblyInfo.cs' { `
         $versionMetadata =
             "$PSScriptRoot\src\Validation.Helper\Properties\AssemblyInfo.g.cs",
