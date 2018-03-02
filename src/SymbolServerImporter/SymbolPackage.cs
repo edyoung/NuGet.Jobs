@@ -32,30 +32,37 @@ namespace NuGet.Services.SymbolsImporter
             get;
         }
 
-        public SymbolPackage(Uri symbolPackageURI, string id, string version)
+        //public SymbolPackage(Uri symbolPackageURI, string id, string version)
+        //{
+        //    Uri = symbolPackageURI;
+        //    Id = id;
+        //    Version = version;
+        //}
+
+        public SymbolPackage(SymbolPackageMessage symbolPackageMessage)
         {
-            Uri = symbolPackageURI;
-            Id = id;
-            Version = version;
+            Uri = symbolPackageMessage.SymbolPackageUri;
+            Id = symbolPackageMessage.PackageId;
+            Version = symbolPackageMessage.PackageVersion;
         }
 
-        public string GetDownloadFolderPath
+        public string DownloadFolderPath
         {
             get
             {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDataFolder, GetName);
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDataFolder, Name);
             }
         }
 
-        public string GetSymbolRepositoryFilePath
+        public string SymbolRepositoryFilePath
         {
             get
             {
-                return Path.Combine(GetDownloadFolderPath, $"SymbolRepository.txt");
+                return Path.Combine(DownloadFolderPath, $"SymbolRepository.txt");
             }
         }
     
-        public string GetName
+        public string Name
         {
             get
             {
@@ -63,7 +70,7 @@ namespace NuGet.Services.SymbolsImporter
             }
         }
 
-        async Task<bool> ISymbolPackage.TryDownloadAsync(int downloadTimeOutInSeconds)
+        public async Task<bool> TryDownloadAsync(int downloadTimeOutInSeconds)
         {
             try
             {
@@ -77,8 +84,8 @@ namespace NuGet.Services.SymbolsImporter
                         using (Stream stream = await httpResponseMessage.Content.ReadAsStreamAsync())
                         {
                             ZipArchive zipArchive = new ZipArchive(stream);
-                            DeleteDirectory(GetDownloadFolderPath);
-                            zipArchive.ExtractToDirectory(GetDownloadFolderPath);
+                            DeleteDirectory(DownloadFolderPath);
+                            zipArchive.ExtractToDirectory(DownloadFolderPath);
                         }
                         //log success 
                         return true;
@@ -109,22 +116,22 @@ namespace NuGet.Services.SymbolsImporter
             }
         }
 
-        void ISymbolPackage.CreateSymbolRepositoryFile()
+        public void CreateSymbolRepositoryFile()
         {
-            var localSymbolPath = GetDownloadFolderPath;
-            //read all the pdb files and add them to a temporary repository
+            var localSymbolPath = DownloadFolderPath;
+            //read all the pdb files and add them to a temporary repository file
             var symbolFiles = new DirectoryInfo(localSymbolPath).GetFiles("*.pdb", SearchOption.AllDirectories).Select(fi => fi.FullName).ToArray() ;
-            File.WriteAllLines(GetSymbolRepositoryFilePath, symbolFiles);
+            File.WriteAllLines(SymbolRepositoryFilePath, symbolFiles);
         }
 
-        public async Task<SymbolArguments> PrepareSymbolPackageForIngestAsync(JobConfiguration serverConfiguration)
-        {
-            if( await ((ISymbolPackage)this).TryDownloadAsync(serverConfiguration.DownloadTimeoutInSeconds) )
-            {
-                ((ISymbolPackage)this).CreateSymbolRepositoryFile();
-                return new SymbolArguments(serverConfiguration.VSTSUri, GetName, GetDownloadFolderPath, serverConfiguration.ExpirationInDays, serverConfiguration.PAT, GetSymbolRepositoryFilePath);
-            }
-            return null;
-        }
+        //public async Task<SymbolArguments> PrepareSymbolPackageForIngestAsync(JobConfiguration serverConfiguration)
+        //{
+        //    if( await ((ISymbolPackage)this).TryDownloadAsync(serverConfiguration.DownloadTimeoutInSeconds) )
+        //    {
+        //        ((ISymbolPackage)this).CreateSymbolRepositoryFile();
+        //        return new SymbolArguments(serverConfiguration.VSTSUri, GetName, GetDownloadFolderPath, serverConfiguration.ExpirationInDays, serverConfiguration.PAT, GetSymbolRepositoryFilePath);
+        //    }
+        //    return null;
+        //}
     }
 }

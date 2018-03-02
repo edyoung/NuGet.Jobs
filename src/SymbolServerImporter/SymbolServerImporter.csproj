@@ -164,13 +164,20 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ISymbolPackage.cs" />
+    <Compile Include="ISymbolPackageMessage.cs" />
+    <Compile Include="ISymbolProcessor.cs" />
+    <Compile Include="ServiceBusConfiguration.cs" />
     <Compile Include="SymbolArguments.cs" />
+    <Compile Include="SymbolPackageBrokerMessageSerializer.cs" />
+    <Compile Include="SymbolPackageMessage.cs" />
     <Compile Include="SymbolPackage.cs" />
     <Compile Include="ISymbolsImporter.cs" />
     <Compile Include="Job.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="JobConfiguration.cs" />
+    <Compile Include="SymbolPackageMessageHandler.cs" />
+    <Compile Include="SymbolProcessor.cs" />
     <Compile Include="SymbolsImporter.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -179,7 +186,7 @@
       <SubType>Designer</SubType>
     </None>
     <None Include="Settings\dev.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
   <ItemGroup>

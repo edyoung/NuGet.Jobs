@@ -8,8 +8,6 @@ namespace NuGet.Services.SymbolsImporter
 {
     public interface ISymbolsImporter
     {
-        Task<int> BeginImport(SymbolPackage package);
-
-        Task<IEnumerable<KeyValuePair<SymbolPackage, int>>> BeginImport(List<SymbolPackage> package);
+        Task<int> Import(ISymbolPackage package);
     }
 }

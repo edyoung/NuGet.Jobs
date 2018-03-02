@@ -29,7 +29,7 @@ namespace NuGet.Services.SymbolsImporter
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public Task<int> BeginImport(SymbolPackage package)
+        public Task<int> Import(SymbolPackage package)
         {
             var processingTask = Task.Run(async () => {
                 ProcessStartInfo pInfo = new ProcessStartInfo();
@@ -37,7 +37,7 @@ namespace NuGet.Services.SymbolsImporter
                 pInfo.UseShellExecute = false;
                 pInfo.WorkingDirectory = GetWorkingDirectory();
                 pInfo.FileName = $"{GetWorkingDirectory()}\\Symbol.exe";
-                var arguments = await package.PrepareSymbolPackageForIngestAsync(_configuration.Value);
+                var arguments = await PrepareSymbolPackageForIngestAsync(_configuration.Value, package);
                 pInfo.Arguments = arguments.ToString();
                 pInfo.RedirectStandardOutput = true;
                 pInfo.RedirectStandardError = true;
@@ -69,17 +69,66 @@ namespace NuGet.Services.SymbolsImporter
             //--service https://cmanu.artifacts.visualstudio.com  --name cmanulocal1 --directory F:\NuGet\SymbolServer\cmvsts\SymServ\src\Math\Math\bin\Debug\netcoreapp2.0 --expirationInDays 365 --patAuthEnvVar SYMBOL_PAT_AUTH_TOKEN --fileListFileName F:\NuGet\SymbolServer\cmvsts\SymServ\src\Math\Math\SymbolFileList.txt --tracelevel verbose
         }
 
-        public Task<IEnumerable<KeyValuePair<SymbolPackage, int>>> BeginImport(List<SymbolPackage> package)
-        {
-            var importers =  package.Select(p => new KeyValuePair<SymbolPackage, Task<int>>(p, BeginImport(p)));
+        //public Task<IEnumerable<KeyValuePair<SymbolPackage, int>>> BeginImport(List<SymbolPackage> package)
+        //{
+        //    var importers =  package.Select(p => new KeyValuePair<SymbolPackage, Task<int>>(p, BeginImport(p)));
 
-            return Task.WhenAll(importers.Select(kv => kv.Value)).ContinueWith(t => importers.Select(kv => new KeyValuePair<SymbolPackage, int>(kv.Key, kv.Value.Result)));
-        }
+        //    return Task.WhenAll(importers.Select(kv => kv.Value)).ContinueWith(t => importers.Select(kv => new KeyValuePair<SymbolPackage, int>(kv.Key, kv.Value.Result)));
+        //}
 
         string GetWorkingDirectory()
         {
             return Path.Combine(Environment.CurrentDirectory, @"symbol\lib\net45");
         }
 
+        async Task<VSTSSymbolArguments> PrepareSymbolPackageForIngestAsync(JobConfiguration serverConfiguration, ISymbolPackage package)
+        {
+            if (await package.TryDownloadAsync(serverConfiguration.DownloadTimeoutInSeconds))
+            {
+                package.CreateSymbolRepositoryFile();
+                return new VSTSSymbolArguments(serverConfiguration.VSTSUri, package.Name, package.DownloadFolderPath, serverConfiguration.ExpirationInDays, serverConfiguration.PAT, package.SymbolRepositoryFilePath);
+            }
+            return null;
+        }
+
+        private class VSTSSymbolArguments
+        {
+            public string VSTSUri
+            { get; }
+
+            public string Name
+            { get; }
+
+            public string Directory
+            { get; }
+
+            public int ExpirationInDays
+            { get; }
+
+            public string PAT
+            { get; }
+
+            public string FileListFileName
+            { get; }
+
+            public string TraceLevel
+            { get; }
+
+            public VSTSSymbolArguments(string vstsUri, string name, string directory, int expirationInDays, string pat, string fileListFileName)
+            {
+                VSTSUri = vstsUri;
+                Name = name;
+                Directory = directory;
+                ExpirationInDays = expirationInDays;
+                PAT = pat;
+                FileListFileName = fileListFileName;
+                TraceLevel = "verbose";
+            }
+
+            public override string ToString()
+            {
+                return $"publish  --service {VSTSUri}  --name {Name}3 --directory {Directory} --expirationInDays {ExpirationInDays} --patAuth {PAT} --fileListFileName {FileListFileName} --tracelevel {TraceLevel}";
+            }
+        }
     }
 }
