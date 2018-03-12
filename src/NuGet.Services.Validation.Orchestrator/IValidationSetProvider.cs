@@ -21,6 +21,8 @@ namespace NuGet.Services.Validation.Orchestrator
         /// requested <paramref name="validationTrackingId"/>. Null if no further processing
         /// should be made (e.g. duplicate validation request was detected).
         /// </returns>
-        Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, Package package);
+        //Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, Package package);
+
+        Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, ValidatedPackage package);
     }
 }

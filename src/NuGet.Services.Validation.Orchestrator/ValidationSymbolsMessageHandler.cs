@@ -9,7 +9,30 @@ using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
-    public class ValidationMessageHandler : IMessageHandler<PackageValidationMessageData>
+    public class ValidatedPackage 
+    {
+       public string Id { get; set; }
+       public string NormalizedVersion { get; set; }
+
+        public int Key { get; set; }
+
+        public DateTime Created { get; set; } 
+
+        public ValidatedPackage(string id, string vers, int key, DateTime created)
+        {
+            Id = id;
+            NormalizedVersion = vers;
+            Key = key;
+            Created = created;
+        }
+
+       public static ValidatedPackage CreateFrom(Package p)
+        {
+            return new ValidatedPackage(p.PackageRegistration.Id, p.NormalizedVersion, p.Key, p.Created);
+        }
+    }
+
+    public class ValidationSymbolsMessageHandler : IMessageHandler<PackageValidationMessageData>
     {
         private readonly ICorePackageService _galleryPackageService;
         private readonly IValidationSetProvider _validationSetProvider;
@@ -17,7 +40,7 @@ namespace NuGet.Services.Validation.Orchestrator
         private readonly IValidationOutcomeProcessor _validationOutcomeProcessor;
         private readonly ILogger<ValidationMessageHandler> _logger;
 
-        public ValidationMessageHandler(
+        public ValidationSymbolsMessageHandler(
             ICorePackageService galleryPackageService,
             IValidationSetProvider validationSetProvider,
             IValidationSetProcessor validationSetProcessor,
@@ -43,9 +66,9 @@ namespace NuGet.Services.Validation.Orchestrator
                 message.PackageVersion,
                 message.ValidationTrackingId))
             {
-                var package = _galleryPackageService.FindPackageByIdAndVersionStrict(message.PackageId, message.PackageVersion);
+                var symbolPackage = _galleryPackageService.FindPackageByIdAndVersionStrict(message.PackageId, message.PackageVersion);
 
-                if (package == null)
+                if (symbolPackage == null)
                 {
                     // no package in DB yet. Might have received message a bit early, need to retry later
                     _logger.LogInformation("Did not find information in DB for package {PackageId} {PackageVersion}",
@@ -53,8 +76,9 @@ namespace NuGet.Services.Validation.Orchestrator
                         message.PackageVersion);
                     return false;
                 }
-                var skinyPackage = ValidatedPackage.CreateFrom(package);
-                var validationSet = await _validationSetProvider.TryGetOrCreateValidationSetAsync(message.ValidationTrackingId, skinyPackage);
+
+                var valSymbP = ValidatedPackage.CreateFrom(symbolPackage);
+                var validationSet = await _validationSetProvider.TryGetOrCreateValidationSetAsync(message.ValidationTrackingId, valSymbP);
 
                 if (validationSet == null)
                 {
@@ -65,8 +89,8 @@ namespace NuGet.Services.Validation.Orchestrator
                     return true;
                 }
 
-                await _validationSetProcessor.ProcessValidationsAsync(validationSet, skinyPackage);
-                await _validationOutcomeProcessor.ProcessValidationOutcomeAsync(validationSet, package);
+                await _validationSetProcessor.ProcessValidationsAsync(validationSet, valSymbP);
+                await _validationOutcomeProcessor.ProcessValidationOutcomeAsync(validationSet, symbolPackage);
             }
             return true;
         }

@@ -20,6 +20,7 @@ namespace NuGet.Services.Validation.Orchestrator
         private static readonly TimeSpan ShutdownLoopSleepTime = TimeSpan.FromSeconds(1);
 
         private readonly ISubscriptionProcessor<PackageValidationMessageData> _subscriptionProcessor;
+        private readonly ISubscriptionProcessor<PackageValidationMessageData> _subscriptionProcessorForSymbols;
         private readonly OrchestrationRunnerConfiguration _configuration;
         private readonly ILogger<OrchestrationRunner> _logger;
 
@@ -39,6 +40,7 @@ namespace NuGet.Services.Validation.Orchestrator
             _logger.LogInformation("Starting up the orchestration");
 
             _subscriptionProcessor.Start();
+            _subscriptionProcessorForSymbols.Start();
             await Task.Delay(_configuration.ProcessRecycleInterval);
 
             _logger.LogInformation("Recycling the process...");

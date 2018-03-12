@@ -67,6 +67,7 @@ namespace NuGet.Services.SymbolsImporter
         private long CalculateOptimalReceiversCount()
         {
             return _dop;
+            //_subscriptionDescription.Status == EntityStatus.Active
             //return _subscriptionDescription.MessageCount/_dop;
         }
 

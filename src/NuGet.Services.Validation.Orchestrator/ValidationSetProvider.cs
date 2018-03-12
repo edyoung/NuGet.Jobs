@@ -34,7 +34,7 @@ namespace NuGet.Services.Validation.Orchestrator
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, Package package)
+        public async Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, ValidatedPackage package)
         {
             var validationSet = await _validationStorageService.GetValidationSetAsync(validationTrackingId);
 
@@ -52,23 +52,23 @@ namespace NuGet.Services.Validation.Orchestrator
             }
             else
             {
-                var sameId = package.PackageRegistration.Id.Equals(validationSet.PackageId, StringComparison.InvariantCultureIgnoreCase);
+                var sameId = package.Id.Equals(validationSet.PackageId, StringComparison.InvariantCultureIgnoreCase);
                 var sameVersion = package.NormalizedVersion.Equals(validationSet.PackageNormalizedVersion, StringComparison.InvariantCultureIgnoreCase);
                 if (!sameId || !sameVersion)
                 {
                     throw new Exception($"Validation set package identity ({validationSet.PackageId} {validationSet.PackageNormalizedVersion})" +
-                        $"does not match expected package identity ({package.PackageRegistration.Id} {package.NormalizedVersion})");
+                        $"does not match expected package identity ({package.Id} {package.NormalizedVersion})");
                 }
             }
 
             return validationSet;
         }
 
-        private async Task<PackageValidationSet> CreateValidationSet(Guid validationTrackingId, Package package)
+        private async Task<PackageValidationSet> CreateValidationSet(Guid validationTrackingId, ValidatedPackage package)
         {
             _logger.LogInformation("Creating validation set {ValidationSetId} for package {PackageId} {PackageVersion}",
                 validationTrackingId,
-                package.PackageRegistration.Id,
+                package.Id,
                 package.NormalizedVersion);
 
             PackageValidationSet validationSet;
@@ -77,7 +77,7 @@ namespace NuGet.Services.Validation.Orchestrator
             validationSet = new PackageValidationSet
             {
                 Created = now,
-                PackageId = package.PackageRegistration.Id,
+                PackageId = package.Id,
                 PackageNormalizedVersion = package.NormalizedVersion,
                 PackageKey = package.Key,
                 PackageValidations = packageValidations,

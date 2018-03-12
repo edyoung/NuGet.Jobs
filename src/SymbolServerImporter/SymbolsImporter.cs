@@ -29,7 +29,7 @@ namespace NuGet.Services.SymbolsImporter
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public Task<int> Import(SymbolPackage package)
+        public Task<int> Import(ISymbolPackage package)
         {
             var processingTask = Task.Run(async () => {
                 ProcessStartInfo pInfo = new ProcessStartInfo();
