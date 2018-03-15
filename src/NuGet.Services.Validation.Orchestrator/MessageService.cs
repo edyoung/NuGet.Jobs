@@ -9,14 +9,14 @@ using NuGetGallery.Services;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
-    public class MessageService : IMessageService
+    public class MessageService : IMessageService<Package>
     {
-        private readonly ICoreMessageService _coreMessageService;
+        private readonly ICoreMessageService<Package> _coreMessageService;
         private readonly EmailConfiguration _emailConfiguration;
         private readonly ILogger<MessageService> _logger;
 
         public MessageService(
-            ICoreMessageService coreMessageService,
+            ICoreMessageService<Package> coreMessageService,
             IOptionsSnapshot<EmailConfiguration> emailConfigurationAccessor,
             ILogger<MessageService> logger)
         {
@@ -68,7 +68,7 @@ namespace NuGet.Services.Validation.Orchestrator
             package = package ?? throw new ArgumentNullException(nameof(package));
 
             var galleryPackageUrl = string.Format(_emailConfiguration.PackageUrlTemplate, package.PackageRegistration.Id, package.NormalizedVersion);
-            _coreMessageService.SendSignedPackageNotAllowedNotice(package, galleryPackageUrl, _emailConfiguration.AnnouncementsUrl, _emailConfiguration.TwitterUrl);
+           _coreMessageService.SendSignedPackageNotAllowedNotice(package, galleryPackageUrl, _emailConfiguration.AnnouncementsUrl, _emailConfiguration.TwitterUrl);
         }
     }
 }

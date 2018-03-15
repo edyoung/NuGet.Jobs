@@ -9,7 +9,7 @@ namespace NuGet.Services.Validation.Orchestrator
     /// <summary>
     /// Interface for the implementation that resolves the validation dependencies and runs them in proper order
     /// </summary>
-    public interface IValidationSetProcessor
+    public interface IValidationSetProcessor<T> where T : class, new()
     {
         /// <summary>
         /// Checks the status of all incomplete validations, starts the ones that can be started (due to dependency changes).
@@ -18,6 +18,6 @@ namespace NuGet.Services.Validation.Orchestrator
         /// <param name="validationSet">Validation set to work with. Any validation updates would be reflected in that object upon return.</param>
         /// <param name="package">Gallery DB package information</param>
         /// <returns>Task object representing async operation</returns>
-        Task ProcessValidationsAsync(PackageValidationSet validationSet, Package package);
+        Task ProcessValidationsAsync(PackageValidationSet validationSet);
     }
 }

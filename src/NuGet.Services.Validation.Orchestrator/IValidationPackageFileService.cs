@@ -7,7 +7,7 @@ using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
-    public interface IValidationPackageFileService : ICorePackageFileService
+    public interface IValidationPackageFileService<T>  : ICorePackageFileService<T> where T : class, IEntity, new()
     {
         /// <summary>
         /// Copy a package from the validation container to a location specific for the validation set. This allows the
@@ -56,5 +56,13 @@ namespace NuGet.Services.Validation.Orchestrator
         /// <param name="validationSet">The validation set, containing validation set and package identifiers.</param>
         /// <returns>True if file exists, false otherwise</returns>
         Task<bool> DoesValidationSetPackageExistAsync(PackageValidationSet validationSet);
+
+        //Task DeletePackageFileAsync(string id, string version);
+
+        //Task DeleteValidationPackageFileAsync(string id, string version);
+
+        //Task<bool> DoesPackageFileExistAsync(IValidatingEntity package);
+
+        //Task<bool> DoesValidationPackageFileExistAsync(IValidatingEntity package);
     }
 }

@@ -30,6 +30,7 @@ using NuGet.Services.Validation.PackageCertificates;
 using NuGet.Services.Validation.PackageSigning;
 using NuGet.Services.Validation.Vcs;
 using NuGetGallery.Services;
+using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
@@ -136,6 +137,9 @@ namespace NuGet.Services.Validation.Orchestrator
             services.AddLogging();
         }
 
+
+        // Job configuration for Package validation
+        // for Symbols the ICorePackageService and ICorePackageFileService needs to initialized for Symbols
         private void ConfigureJobServices(IServiceCollection services, IConfigurationRoot configurationRoot)
         {
             services.Configure<ValidationConfiguration>(configurationRoot.GetSection(ConfigurationSectionName));
@@ -163,7 +167,7 @@ namespace NuGet.Services.Validation.Orchestrator
                 serviceProvider.GetRequiredService<ValidationEntitiesContext>());
             services.AddScoped<IValidationStorageService, ValidationStorageService>();
             services.Add(ServiceDescriptor.Transient(typeof(NuGetGallery.IEntityRepository<>), typeof(NuGetGallery.EntityRepository<>)));
-            services.AddTransient<NuGetGallery.ICorePackageService, NuGetGallery.CorePackageService>();
+            services.AddTransient<NuGetGallery.ICorePackageService<Package>, NuGetGallery.CorePackageService>();
             services.AddTransient<ISubscriptionClient>(serviceProvider =>
             {
                 var configuration = serviceProvider.GetRequiredService<IOptionsSnapshot<ServiceBusConfiguration>>().Value;
@@ -176,7 +180,7 @@ namespace NuGet.Services.Validation.Orchestrator
             });
             services.AddTransient<IPackageValidationEnqueuer, PackageValidationEnqueuer>();
             services.AddTransient<IValidatorProvider, ValidatorProvider>();
-            services.AddTransient<IValidationSetProvider, ValidationSetProvider>();
+            services.AddTransient<IValidationSetProvider<Package>, ValidationSetProvider<Package>>();
             services.AddTransient<IMessageHandler<PackageValidationMessageData>, ValidationMessageHandler>();
             services.AddTransient<IServiceBusMessageSerializer, ServiceBusMessageSerializer>();
             services.AddTransient<IBrokeredMessageSerializer<PackageValidationMessageData>, PackageValidationMessageDataSerializationAdapter>();
@@ -215,8 +219,8 @@ namespace NuGet.Services.Validation.Orchestrator
                     : (IMailSender)new MailSender(mailSenderConfiguration);
             });
             services.AddTransient<ICoreMessageServiceConfiguration, CoreMessageServiceConfiguration>();
-            services.AddTransient<ICoreMessageService, CoreMessageService>();
-            services.AddTransient<IMessageService, MessageService>();
+            services.AddTransient<ICoreMessageService<Package>, CoreMessageService>();
+            services.AddTransient<IMessageService<Package>, MessageService>();
             services.AddTransient<ITelemetryService, TelemetryService>();
             services.AddSingleton(new TelemetryClient());
         }
@@ -287,27 +291,27 @@ namespace NuGet.Services.Validation.Orchestrator
                     parameterKey: ValidationStorageBindingKey);
 
             containerBuilder
-                .RegisterKeyedTypeWithKeyedParameter<IValidationPackageFileService, ValidationPackageFileService, NuGetGallery.ICoreFileStorageService>(
+                .RegisterKeyedTypeWithKeyedParameter<IValidationPackageFileService<Package>, ValidationPackageFileService, NuGetGallery.ICoreFileStorageService>(
                     typeKey: ValidationStorageBindingKey,
                     parameterKey: ValidationStorageBindingKey);
 
             containerBuilder
                 .RegisterTypeWithKeyedParameter<
-                    IValidationOutcomeProcessor,
-                    ValidationOutcomeProcessor,
-                    IValidationPackageFileService>(ValidationStorageBindingKey);
+                    IValidationOutcomeProcessor<Package>,
+                    ValidationOutcomeProcessor<Package>,
+                    IValidationPackageFileService<Package>>(ValidationStorageBindingKey);
 
             containerBuilder
                 .RegisterTypeWithKeyedParameter<
-                    IValidationSetProvider,
-                    ValidationSetProvider,
-                    IValidationPackageFileService>(ValidationStorageBindingKey);
+                    IValidationSetProvider<Package>,
+                    ValidationSetProvider<Package>,
+                    IValidationPackageFileService<Package>>(ValidationStorageBindingKey);
 
             containerBuilder
                 .RegisterTypeWithKeyedParameter<
-                    IValidationSetProcessor,
-                    ValidationSetProcessor,
-                    IValidationPackageFileService>(ValidationStorageBindingKey);
+                    IValidationSetProcessor<Package>,
+                    ValidationSetProcessor<Package>,
+                    IValidationPackageFileService<Package>>(ValidationStorageBindingKey);
 
             containerBuilder
                 .RegisterType<ScopedMessageHandler<PackageValidationMessageData>>()

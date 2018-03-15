@@ -5,10 +5,10 @@ using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
-    public interface IMessageService
+    public interface IMessageService<T> where T: class, new()
     {
-        void SendPackagePublishedMessage(Package package);
-        void SendPackageValidationFailedMessage(Package package);
-        void SendPackageSignedValidationFailedMessage(Package package);
+        void SendPackagePublishedMessage(T package);
+        void SendPackageValidationFailedMessage(T package);
+        void SendPackageSignedValidationFailedMessage(T package);
     }
 }

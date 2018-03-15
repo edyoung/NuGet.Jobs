@@ -11,22 +11,26 @@ using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
+    /// <summary>
+    /// this is the message handler for the Package 
+    /// for symbols needs to be a different one because the logic to start validation is different.
+    /// </summary>
     public class ValidationMessageHandler : IMessageHandler<PackageValidationMessageData>
     {
         private readonly ValidationConfiguration _configs;
-        private readonly ICorePackageService _galleryPackageService;
-        private readonly IValidationSetProvider _validationSetProvider;
-        private readonly IValidationSetProcessor _validationSetProcessor;
-        private readonly IValidationOutcomeProcessor _validationOutcomeProcessor;
+        private readonly ICorePackageService<Package> _galleryPackageService;
+        private readonly IValidationSetProvider<Package> _validationSetProvider;
+        private readonly IValidationSetProcessor<Package> _validationSetProcessor;
+        private readonly IValidationOutcomeProcessor<Package> _validationOutcomeProcessor;
         private readonly ITelemetryService _telemetryService;
         private readonly ILogger<ValidationMessageHandler> _logger;
 
         public ValidationMessageHandler(
             IOptionsSnapshot<ValidationConfiguration> validationConfigsAccessor,
-            ICorePackageService galleryPackageService,
-            IValidationSetProvider validationSetProvider,
-            IValidationSetProcessor validationSetProcessor,
-            IValidationOutcomeProcessor validationOutcomeProcessor,
+            ICorePackageService<Package> galleryPackageService,
+            IValidationSetProvider<Package> validationSetProvider,
+            IValidationSetProcessor<Package> validationSetProcessor,
+            IValidationOutcomeProcessor<Package> validationOutcomeProcessor,
             ITelemetryService telemetryService,
             ILogger<ValidationMessageHandler> logger)
         {
@@ -70,6 +74,7 @@ namespace NuGet.Services.Validation.Orchestrator
                 message.PackageVersion,
                 message.ValidationTrackingId))
             {
+                //inquire if the entity is ready to be validated
                 var package = _galleryPackageService.FindPackageByIdAndVersionStrict(message.PackageId, message.PackageVersion);
 
                 if (package == null)
@@ -99,7 +104,7 @@ namespace NuGet.Services.Validation.Orchestrator
                     }
                 }
 
-                var validationSet = await _validationSetProvider.TryGetOrCreateValidationSetAsync(message.ValidationTrackingId, package);
+                var validationSet = await _validationSetProvider.TryGetOrCreateValidationSetAsync(message.ValidationTrackingId, package, message.PackageId, message.PackageVersion, _galleryPackageService.GetStatus(package));
 
                 if (validationSet == null)
                 {
@@ -110,7 +115,7 @@ namespace NuGet.Services.Validation.Orchestrator
                     return true;
                 }
 
-                await _validationSetProcessor.ProcessValidationsAsync(validationSet, package);
+                await _validationSetProcessor.ProcessValidationsAsync(validationSet);
                 await _validationOutcomeProcessor.ProcessValidationOutcomeAsync(validationSet, package);
             }
             return true;

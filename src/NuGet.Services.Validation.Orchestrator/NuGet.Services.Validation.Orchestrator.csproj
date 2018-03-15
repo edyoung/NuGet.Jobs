@@ -52,6 +52,8 @@
     <Compile Include="Configuration\EmailConfiguration.cs" />
     <Compile Include="Error.cs" />
     <Compile Include="IMessageService.cs" />
+    <Compile Include="IValidating.cs" />
+    <Compile Include="IValidationGalleryService .cs" />
     <Compile Include="IValidationOutcomeProcessor.cs" />
     <Compile Include="IValidationPackageFileService.cs" />
     <Compile Include="IValidationSetProcessor.cs" />
