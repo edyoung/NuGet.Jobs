@@ -49,20 +49,6 @@ namespace NuGet.Services.Validation.Orchestrator
             return metadata;
         }
 
-        public static string GetPacakgeId(IValidatingEntity entity)
-        {
-            JObject id = entity.Id;
-            string pId = (string)id.SelectToken("Id");
-            return pId;
-        }
-
-        public static string GetPacakgeNormalizedVersion(IValidatingEntity entity)
-        {
-            JObject id = entity.Id;
-            string pNVersion = (string)id.SelectToken("NormalizedVersion");
-            return pNVersion;
-        }
-
         public async Task UpdateStatusAsync(IValidatingEntity validatingEntity, PackageStatus newStatus, bool commitChanges = true)
         {
             Package p = GetPackage(validatingEntity.Id); ;

@@ -17,10 +17,6 @@ namespace NuGet.Services.Validation.Orchestrator
     {
         JObject Id { get; set;}
 
-        //string PId { get;}
-
-        //string NormalizedVersion{ get; }
-
         int Key { get; set; }
 
         JObject Metadata { get; set; }
