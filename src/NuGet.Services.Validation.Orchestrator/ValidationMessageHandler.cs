@@ -8,13 +8,14 @@ using Microsoft.Extensions.Options;
 using NuGet.Services.ServiceBus;
 using NuGet.Services.Validation.Orchestrator.Telemetry;
 using NuGetGallery;
+using Newtonsoft.Json.Linq;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
     public class ValidationMessageHandler : IMessageHandler<PackageValidationMessageData>
     {
         private readonly ValidationConfiguration _configs;
-        private readonly ICorePackageService _galleryPackageService;
+        private readonly IEntityService _galleryPackageService;
         private readonly IValidationSetProvider _validationSetProvider;
         private readonly IValidationSetProcessor _validationSetProcessor;
         private readonly IValidationOutcomeProcessor _validationOutcomeProcessor;
@@ -23,7 +24,7 @@ namespace NuGet.Services.Validation.Orchestrator
 
         public ValidationMessageHandler(
             IOptionsSnapshot<ValidationConfiguration> validationConfigsAccessor,
-            ICorePackageService galleryPackageService,
+            IEntityService galleryPackageService,
             IValidationSetProvider validationSetProvider,
             IValidationSetProcessor validationSetProcessor,
             IValidationOutcomeProcessor validationOutcomeProcessor,
@@ -70,7 +71,7 @@ namespace NuGet.Services.Validation.Orchestrator
                 message.PackageVersion,
                 message.ValidationTrackingId))
             {
-                var package = _galleryPackageService.FindPackageByIdAndVersionStrict(message.PackageId, message.PackageVersion);
+                var package = _galleryPackageService.FindById(new JObject { { "Id", message.PackageId }, { "NormalizedVersion", message.PackageVersion }});
 
                 if (package == null)
                 {
@@ -99,7 +100,7 @@ namespace NuGet.Services.Validation.Orchestrator
                     }
                 }
 
-                var validationSet = await _validationSetProvider.TryGetOrCreateValidationSetAsync(message.ValidationTrackingId, package);
+                var validationSet = await _validationSetProvider.TryGetOrCreateValidationSetAsync(message, package);
 
                 if (validationSet == null)
                 {
@@ -110,7 +111,7 @@ namespace NuGet.Services.Validation.Orchestrator
                     return true;
                 }
 
-                await _validationSetProcessor.ProcessValidationsAsync(validationSet, package);
+                await _validationSetProcessor.ProcessValidationsAsync(validationSet);
                 await _validationOutcomeProcessor.ProcessValidationOutcomeAsync(validationSet, package);
             }
             return true;

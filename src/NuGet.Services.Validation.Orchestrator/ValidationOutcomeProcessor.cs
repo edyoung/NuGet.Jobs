@@ -17,7 +17,7 @@ namespace NuGet.Services.Validation.Orchestrator
         private readonly IValidationStorageService _validationStorageService;
         private readonly IPackageValidationEnqueuer _validationEnqueuer;
         private readonly IPackageStatusProcessor _packageStateProcessor;
-        private readonly IValidationPackageFileService _packageFileService;
+        private readonly IFileService _packageFileService;
         private readonly ValidationConfiguration _validationConfiguration;
         private readonly Dictionary<string, ValidationConfigurationItem> _validationConfigurationsByName;
         private readonly IMessageService _messageService;
@@ -28,7 +28,7 @@ namespace NuGet.Services.Validation.Orchestrator
             IValidationStorageService validationStorageService,
             IPackageValidationEnqueuer validationEnqueuer,
             IPackageStatusProcessor validatedPackageProcessor,
-            IValidationPackageFileService packageFileService,
+            IFileService packageFileService,
             IOptionsSnapshot<ValidationConfiguration> validationConfigurationAccessor,
             IMessageService messageService,
             ITelemetryService telemetryService,
@@ -52,15 +52,15 @@ namespace NuGet.Services.Validation.Orchestrator
             _validationConfigurationsByName = _validationConfiguration.Validations.ToDictionary(v => v.Name);
         }
 
-        public async Task ProcessValidationOutcomeAsync(PackageValidationSet validationSet, Package package)
+        public async Task ProcessValidationOutcomeAsync(PackageValidationSet validationSet, IValidatingEntity package)
         {
             var failedValidations = GetFailedValidations(validationSet);
 
             if (failedValidations.Any())
             {
                 _logger.LogWarning("Some validations failed for package {PackageId} {PackageVersion}, validation set {ValidationSetId}: {FailedValidations}",
-                    package.PackageRegistration.Id,
-                    package.NormalizedVersion,
+                    validationSet.PackageId,
+                    validationSet.PackageNormalizedVersion,
                     validationSet.ValidationTrackingId,
                     failedValidations.Select(x => x.Type).ToList());
 
@@ -69,7 +69,7 @@ namespace NuGet.Services.Validation.Orchestrator
                 // customer when the package first moves to the failed validation state. If an admin comes along and
                 // revalidates the package and the package fails validation again, we don't want another email going
                 // out since that would be noisy for the customer.                
-                if (package.PackageStatusKey == PackageStatus.Validating)
+                if (package.Status == PackageStatus.Validating)
                 {
                     await _packageStateProcessor.SetPackageStatusAsync(package, validationSet, PackageStatus.FailedValidation);
 
@@ -82,11 +82,12 @@ namespace NuGet.Services.Validation.Orchestrator
 
                     if (issuesExistAndAllPackageSigned)
                     {
-                        _messageService.SendPackageSignedValidationFailedMessage(package);
+                        // to do - comment it out for now 
+                       // _messageService.SendPackageSignedValidationFailedMessage(package);
                     }
                     else
                     {
-                        _messageService.SendPackageValidationFailedMessage(package);
+                       // _messageService.SendPackageValidationFailedMessage(package);
                     }
                 }
                 else
@@ -96,9 +97,9 @@ namespace NuGet.Services.Validation.Orchestrator
                     // and let the person who requested revalidation to decide how to proceed. Ops will be
                     // alerted by failed validation monitoring.
                     _logger.LogInformation("Package {PackageId} {PackageVersion} was {PackageStatus} when validation set {ValidationSetId} failed. Will not mark it as failed.",
-                        package.PackageRegistration.Id,
-                        package.NormalizedVersion,
-                        package.PackageStatusKey,
+                        validationSet.PackageId,
+                        validationSet.PackageNormalizedVersion,
+                        package.Status,
                         validationSet.ValidationTrackingId);
                 }
 
@@ -107,11 +108,11 @@ namespace NuGet.Services.Validation.Orchestrator
             else if (AllValidationsSucceeded(validationSet))
             {
                 _logger.LogInformation("All validations are complete for the package {PackageId} {PackageVersion}, validation set {ValidationSetId}",
-                    package.PackageRegistration.Id,
-                    package.NormalizedVersion,
+                    validationSet.PackageId,
+                        validationSet.PackageNormalizedVersion,
                     validationSet.ValidationTrackingId);
 
-                var fromStatus = package.PackageStatusKey;
+                var fromStatus = package.Status;
 
                 // Always set the package status to available so that processors can have a change to fix packages
                 // that are already available. Processors should no-op when their work is already done, so the
@@ -123,7 +124,7 @@ namespace NuGet.Services.Validation.Orchestrator
                 // Only send the email when first transitioning into the Available state.
                 if (fromStatus != PackageStatus.Available)
                 {
-                    _messageService.SendPackagePublishedMessage(package);
+                    //_messageService.SendPackagePublishedMessage(package);
                 }
 
                 await CompleteValidationSetAsync(package, validationSet, isSuccess: true);
@@ -148,8 +149,9 @@ namespace NuGet.Services.Validation.Orchestrator
                     previousDuration <= _validationConfiguration.ValidationSetNotificationTimeout &&
                     await _validationStorageService.GetValidationSetCountAsync(package.Key) == 1)
                 {
-                    _messageService.SendPackageValidationTakingTooLongMessage(package);
-                    _telemetryService.TrackSentValidationTakingTooLongMessage(package.PackageRegistration.Id, package.NormalizedVersion, validationSet.ValidationTrackingId);
+                    //_messageService.SendPackageValidationTakingTooLongMessage(package);
+                    _telemetryService.TrackSentValidationTakingTooLongMessage(validationSet.PackageId,
+                        validationSet.PackageNormalizedVersion, validationSet.ValidationTrackingId);
                 }
 
                 // Track any validations that have timed out.
@@ -174,25 +176,27 @@ namespace NuGet.Services.Validation.Orchestrator
                 // Schedule another check if we haven't reached the validation set timeout yet.
                 if (validationSetDuration <= _validationConfiguration.TimeoutValidationSetAfter)
                 {
-                    var messageData = new PackageValidationMessageData(package.PackageRegistration.Id, package.Version, validationSet.ValidationTrackingId);
+                    var messageData = new PackageValidationMessageData(validationSet.PackageId,
+                        validationSet.PackageNormalizedVersion, validationSet.ValidationTrackingId);
                     var postponeUntil = DateTimeOffset.UtcNow + _validationConfiguration.ValidationMessageRecheckPeriod;
 
                     await _validationEnqueuer.StartValidationAsync(messageData, postponeUntil);
                 }
                 else
                 {
-                    _telemetryService.TrackValidationSetTimeout(package.PackageRegistration.Id, package.NormalizedVersion, validationSet.ValidationTrackingId);
+                    _telemetryService.TrackValidationSetTimeout(validationSet.PackageId,
+                        validationSet.PackageNormalizedVersion, validationSet.ValidationTrackingId);
                 }
             }
         }
 
-        private async Task CompleteValidationSetAsync(Package package, PackageValidationSet validationSet, bool isSuccess)
+        private async Task CompleteValidationSetAsync(IValidatingEntity package, PackageValidationSet validationSet, bool isSuccess)
         {
             await _packageFileService.DeletePackageForValidationSetAsync(validationSet);
 
             _logger.LogInformation("Done processing {PackageId} {PackageVersion} {ValidationSetId} with IsSuccess = {IsSuccess}.",
-                package.PackageRegistration.Id,
-                package.NormalizedVersion,
+                validationSet.PackageId,
+                        validationSet.PackageNormalizedVersion,
                 validationSet.ValidationTrackingId,
                 isSuccess);
 

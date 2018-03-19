@@ -12,7 +12,7 @@ namespace NuGet.Services.Validation.Orchestrator
     public interface IPackageStatusProcessor
     {
         Task SetPackageStatusAsync(
-            Package package,
+            IValidatingEntity package,
             PackageValidationSet validationSet,
             PackageStatus packageStatus);
     }

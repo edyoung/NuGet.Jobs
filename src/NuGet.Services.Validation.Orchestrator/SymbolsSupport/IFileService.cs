@@ -1,28 +1,37 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
-
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
-    public interface IValidationPackageFileService1 : ICorePackageFileService
+    public interface IFileService
     {
+        Task DeleteValidationPackageFileAsync(PackageValidationSet validationSet);
+
+
+        Task<bool> DoesPackageFileExistAsync(PackageValidationSet validationSet);
+
+        Task<bool> DoesValidationPackageFileExistAsync(PackageValidationSet validationSet);
+
+        Task DeletePackageFileAsync(PackageValidationSet validationSet);
+
         /// <summary>
         /// Download the package content from the packages container to a temporary location on disk.
         /// </summary>
         /// <param name="package">The package metadata.</param>
         /// <returns>The package stream.</returns>
-        Task<Stream> DownloadPackageFileToDiskAsync(Package package);
+        Task<Stream> DownloadPackageFileToDiskAsync(PackageValidationSet validationSet);
 
         /// <summary>
         /// Backs up the package file from the location specific for the validation set.
         /// </summary>
         /// <param name="package">The package metadata.</param>
         /// <param name="validationSet">The validation set, containing validation set and package identifiers.</param>
-        Task BackupPackageFileFromValidationSetPackageAsync(Package package, PackageValidationSet validationSet);
+        Task BackupPackageFileFromValidationSetPackageAsync(PackageValidationSet validationSet);
 
         /// <summary>
         /// Copy a package from the validation container to a location specific for the validation set. This allows the
@@ -55,7 +64,7 @@ namespace NuGet.Services.Validation.Orchestrator
         /// </summary>
         /// <param name="id">The package ID.</param>
         /// <param name="normalizedVersion">The normalized package version.</param>
-        Task CopyValidationPackageToPackageFileAsync(string id, string normalizedVersion);
+        Task CopyValidationPackageToPackageFileAsync(PackageValidationSet validationSet);
 
         /// <summary>
         /// Copy a package URL to a location specific for the validation set.
