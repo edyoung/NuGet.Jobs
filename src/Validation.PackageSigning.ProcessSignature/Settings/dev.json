@@ -21,7 +21,7 @@
     "AllowedRepositorySigningCertificates": [
       "4456d5d38709876dcd20ef3d7ba98bfd79fcaee91141d153a55f10841ef909c6"
     ],
-    "V3ServiceIndexUrl": "https://apidev.nugettest.org/v3/index.json"
+    "V3ServiceIndexUrl": "https://example-service/v3/index.json"
   },
 
   "PackageDownloadTimeout": "00:10:00",
