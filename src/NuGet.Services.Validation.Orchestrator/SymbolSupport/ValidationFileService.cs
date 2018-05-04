@@ -1,42 +1,130 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
-
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.IO;
-using System.Threading;
+using System.Globalization;
 using System.Threading.Tasks;
+using System.Threading;
+using NuGetGallery;
 using Microsoft.Extensions.Logging;
 using NuGet.Jobs.Validation;
-using NuGetGallery;
 
 namespace NuGet.Services.Validation.Orchestrator
 {
-    /*
-    public class ValidationPackageFileService : CorePackageFileService, IValidationPackageFileService
+    public abstract class ValidationFileService : IFileService
     {
+
         /// <summary>
         /// The value picked today is based off of the maximum duration we wait when downloading packages using the
         /// <see cref="IPackageDownloader"/>.
         /// </summary>
         private static readonly TimeSpan AccessDuration = TimeSpan.FromMinutes(10);
 
-        private readonly ICoreFileStorageService _fileStorageService;
         private readonly IPackageDownloader _packageDownloader;
-        private readonly ILogger<ValidationPackageFileService> _logger;
+        private readonly ILogger<ValidationFileService> _logger;
+        ICoreFileStorageService _fileStorageService;
+        string _pathTemplate;
+        string _extension;
+        string _folderName;
 
-        public ValidationPackageFileService(
+
+        public ValidationFileService(
             ICoreFileStorageService fileStorageService,
             IPackageDownloader packageDownloader,
-            ILogger<ValidationPackageFileService> logger) : base(fileStorageService)
+            ILogger<ValidationFileService> logger,
+            string pathTemplate,
+            string extension,
+            string folderName) 
         {
-            _fileStorageService = fileStorageService ?? throw new ArgumentNullException(nameof(fileStorageService));
+            _fileStorageService = fileStorageService;
             _packageDownloader = packageDownloader ?? throw new ArgumentNullException(nameof(packageDownloader));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _pathTemplate = pathTemplate;
+             _extension = extension;
+             _folderName = folderName;
         }
 
-        public async Task<Stream> DownloadPackageFileToDiskAsync(Package package)
+        //the Core method if public 
+        public string BuildFileName(PackageValidationSet validationSet, string pathTemplate, string extension)
         {
-            var packageUri = await GetPackageReadUriAsync(package);
+            string id = validationSet.PackageId;
+            string version = validationSet.PackageNormalizedVersion;
+
+            if (id == null)
+            {
+                throw new ArgumentNullException(nameof(id));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            // Note: packages should be saved and retrieved in blob storage using the lower case version of their filename because
+            // a) package IDs can and did change case over time
+            // b) blob storage is case sensitive
+            // c) we don't want to hit the database just to look up the right case
+            // and remember - version can contain letters too.
+            return String.Format(
+                CultureInfo.InvariantCulture,
+                pathTemplate,
+                id.ToLowerInvariant(),
+                version.ToLowerInvariant(),
+                extension);
+        }
+    
+        
+
+        public Task<Uri> GetPackageReadUriAsync(PackageValidationSet validationSet)
+        {
+            var fileName = BuildFileName(validationSet, _pathTemplate, _extension);
+            return _fileStorageService.GetFileReadUriAsync(_folderName, fileName, endOfAccess: null);
+        }
+
+        public Task DeleteValidationPackageFileAsync(PackageValidationSet validationSet)
+        {
+            var fileName = BuildFileName(
+                validationSet,
+                CoreConstants.PackageFileSavePathTemplate,
+                CoreConstants.NuGetPackageFileExtension);
+
+            return _fileStorageService.DeleteFileAsync(CoreConstants.ValidationFolderName, fileName);
+        }
+
+        public Task<bool> DoesPackageFileExistAsync(PackageValidationSet validationSet)
+        {
+            var fileName = BuildFileName(validationSet, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
+            return _fileStorageService.FileExistsAsync(CoreConstants.PackagesFolderName, fileName);
+        }
+
+
+        public async Task StorePackageFileInBackupLocationAsync(PackageValidationSet validationSet, Stream packageFile)
+        {
+            await Task<bool>.FromResult (true);
+        }
+
+        public Task<bool> DoesValidationPackageFileExistAsync(PackageValidationSet validationSet)
+        {
+            var fileName = BuildFileName(validationSet, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
+            return _fileStorageService.FileExistsAsync(CoreConstants.ValidationFolderName, fileName);
+        }
+
+        public Task DeletePackageFileAsync(PackageValidationSet validationSet)
+        {
+            var fileName = BuildFileName(validationSet, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
+            return _fileStorageService.DeleteFileAsync(CoreConstants.PackagesFolderName, fileName);
+        }
+
+
+        /// <summary>
+        /// ///////////////////////////////////////////////////////////////////
+        /// </summary>
+        /// <param name="validationSet"></param>
+        /// <returns></returns>
+        public async Task<Stream> DownloadPackageFileToDiskAsync(PackageValidationSet validationSet)
+        {
+            var packageUri = await GetPackageReadUriAsync(validationSet);
 
             return await _packageDownloader.DownloadAsync(packageUri, CancellationToken.None);
         }
@@ -44,10 +132,9 @@ namespace NuGet.Services.Validation.Orchestrator
         public Task CopyValidationPackageForValidationSetAsync(PackageValidationSet validationSet)
         {
             var srcFileName = BuildFileName(
-                validationSet.PackageId,
-                validationSet.PackageNormalizedVersion,
-                CoreConstants.PackageFileSavePathTemplate,
-                CoreConstants.NuGetPackageFileExtension);
+                validationSet,
+                _pathTemplate,
+                _extension);
 
             return CopyFileAsync(
                 CoreConstants.ValidationFolderName,
@@ -57,7 +144,7 @@ namespace NuGet.Services.Validation.Orchestrator
                 AccessConditionWrapper.GenerateEmptyCondition());
         }
 
-        public async Task BackupPackageFileFromValidationSetPackageAsync(Package package, PackageValidationSet validationSet)
+        public async Task BackupPackageFileFromValidationSetPackageAsync(PackageValidationSet validationSet)
         {
             _logger.LogInformation(
                 "Backing up package for validation set {ValidationTrackingId} ({PackageId} {PackageVersion}).",
@@ -71,38 +158,36 @@ namespace NuGet.Services.Validation.Orchestrator
 
             using (var packageStream = await _packageDownloader.DownloadAsync(packageUri, CancellationToken.None))
             {
-                await StorePackageFileInBackupLocationAsync(package, packageStream);
+                await StorePackageFileInBackupLocationAsync(validationSet, packageStream);
             }
         }
 
         public Task<string> CopyPackageFileForValidationSetAsync(PackageValidationSet validationSet)
         {
             var srcFileName = BuildFileName(
-                validationSet.PackageId,
-                validationSet.PackageNormalizedVersion,
-                CoreConstants.PackageFileSavePathTemplate,
-                CoreConstants.NuGetPackageFileExtension);
+                validationSet,
+                _pathTemplate,
+                _extension);
 
             return CopyFileAsync(
-                CoreConstants.PackagesFolderName,
+                _folderName,
                 srcFileName,
                 CoreConstants.ValidationFolderName,
                 BuildValidationSetPackageFileName(validationSet),
                 AccessConditionWrapper.GenerateEmptyCondition());
         }
 
-        public Task CopyValidationPackageToPackageFileAsync(string id, string normalizedVersion)
+        public Task CopyValidationPackageToPackageFileAsync(PackageValidationSet validationSet)
         {
             var fileName = BuildFileName(
-                id,
-                normalizedVersion,
-                CoreConstants.PackageFileSavePathTemplate,
-                CoreConstants.NuGetPackageFileExtension);
+                validationSet,
+                _pathTemplate,
+                _extension);
 
             return CopyFileAsync(
                 CoreConstants.ValidationFolderName,
                 fileName,
-                CoreConstants.PackagesFolderName,
+                _folderName,
                 fileName,
                 AccessConditionWrapper.GenerateIfNotExistsCondition());
         }
@@ -114,15 +199,14 @@ namespace NuGet.Services.Validation.Orchestrator
             var srcFileName = BuildValidationSetPackageFileName(validationSet);
 
             var destFileName = BuildFileName(
-                validationSet.PackageId,
-                validationSet.PackageNormalizedVersion,
-                CoreConstants.PackageFileSavePathTemplate,
-                CoreConstants.NuGetPackageFileExtension);
+                validationSet,
+                _pathTemplate,
+                _extension);
 
             return CopyFileAsync(
                 CoreConstants.ValidationFolderName,
                 srcFileName,
-                CoreConstants.PackagesFolderName,
+                _folderName,
                 destFileName,
                 destAccessCondition);
         }
@@ -130,7 +214,7 @@ namespace NuGet.Services.Validation.Orchestrator
         public Task<bool> DoesValidationSetPackageExistAsync(PackageValidationSet validationSet)
         {
             var fileName = BuildValidationSetPackageFileName(validationSet);
-            
+
             return _fileStorageService.FileExistsAsync(CoreConstants.ValidationFolderName, fileName);
         }
 
@@ -193,13 +277,13 @@ namespace NuGet.Services.Validation.Orchestrator
                 destAccessCondition);
         }
 
-        private static string BuildValidationSetPackageFileName(PackageValidationSet validationSet)
+        private string BuildValidationSetPackageFileName(PackageValidationSet validationSet)
         {
             return $"validation-sets/{validationSet.ValidationTrackingId}/" +
                 $"{validationSet.PackageId.ToLowerInvariant()}." +
                 $"{validationSet.PackageNormalizedVersion.ToLowerInvariant()}" +
-                CoreConstants.NuGetPackageFileExtension;
+                _extension;
         }
     }
-    */
+
 }

@@ -10,7 +10,7 @@ namespace NuGet.Services.Validation.Orchestrator
     /// <summary>
     /// Provides <see cref="PackageValidationSet"/> instances.
     /// </summary>
-    public interface IValidationSetProvider
+    public interface IValidationSetProvider<T> where T : IEntity
     {
         /// <summary>
         /// Reads validation set data from storage, creates one if did not exist in storage
@@ -21,6 +21,7 @@ namespace NuGet.Services.Validation.Orchestrator
         /// requested <paramref name="validationTrackingId"/>. Null if no further processing
         /// should be made (e.g. duplicate validation request was detected).
         /// </returns>
-        Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, Package package);
+        //Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(Guid validationTrackingId, Package package);
+        Task<PackageValidationSet> TryGetOrCreateValidationSetAsync(PackageValidationMessageData message, IValidatingEntity<T> package);
     }
 }
