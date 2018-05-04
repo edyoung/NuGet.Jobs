@@ -19,6 +19,7 @@
   },
   "ProcessSignature": {
     "AllowedRepositorySigningCertificates": [
+      "4456d5d38709876dcd20ef3d7ba98bfd79fcaee91141d153a55f10841ef909c6",
       "cc2cb7f3df870efb083b54cbecd18fddb7e74d37389e1ad94085db957da72acb"
     ],
     "V3ServiceIndexUrl": "https://example-service/v3/index.json"
