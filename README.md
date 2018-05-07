@@ -1,6 +1,7 @@
 NuGet.Jobs
 ==============
 
+
 1. Each job would be an exe with 2 main classes Program and Job
 2. Program.Main should simply do the following and nothing more
 
